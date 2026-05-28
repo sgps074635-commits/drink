@@ -1,166 +1,50 @@
-<!DOCTYPE html>
-<html lang="zh-TW">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>789說喝就喝 🌸</title>
-  
-  <script src="https://cdn.tailwindcss.com"></script>
-  
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+// 1. 加入購物車邏輯
+      const addToCart = () => {
+        if (!appUser || !pendingOrder) return;
+        if (!orderConfig.sugar && !sugarLocked) { showNotify('請選擇甜度！', 'error'); setValidationError('sugar'); return; }
+        if (!orderConfig.ice && !iceLocked) { showNotify('請選擇冰塊！', 'error'); setValidationError('ice'); return; }
 
-  <script type="importmap">
-    {
-      "imports": {
-        "react": "https://esm.sh/react@18.2.0",
-        "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
-        "lucide-react": "https://esm.sh/lucide-react@0.378.0",
-        "firebase/app": "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js",
-        "firebase/firestore": "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js",
-        "firebase/auth": "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js"
-      }
-    }
-  </script>
-  
-  <style>
-    @keyframes blob {
-      0% { transform: translate(0px, 0px) scale(1); }
-      33% { transform: translate(30px, -50px) scale(1.1); }
-      66% { transform: translate(-20px, 20px) scale(0.9); }
-      100% { transform: translate(0px, 0px) scale(1); }
-    }
-    .animate-blob { animation: blob 7s infinite; }
-    .animation-delay-2000 { animation-delay: 2s; }
-    .animation-delay-4000 { animation-delay: 4s; }
-    .animate-fade-in { animation: fadeIn 0.5s ease-out; }
-    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-    .animate-slide-up { animation: slideUp 0.3s ease-out; }
-    @keyframes slideUp { from { transform: translate(-50%, 20px); opacity: 0; } to { transform: translate(-50%, 0); opacity: 1; } }
-    .animate-bounce-in { animation: bounceIn 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55); }
-    @keyframes bounceIn { 0% { transform: scale(0.8); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
-    .no-scrollbar::-webkit-scrollbar { display: none; }
-    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-  </style>
-</head>
-<body class="bg-[#FFF9F0] text-stone-700 font-sans selection:bg-orange-200">
-  <div id="root"></div>
+        const finalPrice = calculateCurrentTotal();
+        const toppingNames = orderConfig.toppings.map(t => t.name);
 
-  <script type="text/babel" data-type="module">
-    import React, { useState, useEffect } from 'react';
-    import { createRoot } from 'react-dom/client';
-    import { initializeApp } from 'firebase/app';
-    import { 
-      getFirestore, collection, addDoc, onSnapshot, 
-      doc, deleteDoc, updateDoc, writeBatch
-    } from 'firebase/firestore';
-    import { 
-      getAuth, signInAnonymously, onAuthStateChanged 
-    } from 'firebase/auth';
-    import { 
-      ShoppingBag, Users, Trash2, LogOut, Check, Coffee,
-      Settings, RefreshCw, AlertTriangle, Layers,
-      Store, Phone, MapPin, ClipboardList, Info, CheckSquare, Square,
-      HandPlatter, DollarSign, X
-    } from 'lucide-react';
+        const cartItem = {
+          cartId: Date.now() + Math.random(), // 購物車專用暫時 ID
+          userName: appUser.name,
+          storeKey: activeStoreKey,
+          storeName: currentStore.name,
+          itemName: pendingOrder.item.name,
+          size: pendingOrder.size,
+          price: finalPrice,
+          sugar: String(orderConfig.sugar),
+          ice: String(orderConfig.ice),
+          toppings: toppingNames,
+          timestamp: Date.now(),
+          userId: user ? user.uid : 'anonymous',
+          isPickedUp: false
+        };
 
-    // --- 常數設定 ---
-    const ADMIN_USER = 'ok';
-    const ADMIN_PASS = 'okok'; 
+        setCart(prev => [...prev, cartItem]);
+        showNotify(`已加入購物車：${pendingOrder.item.name}`);
+        setModalOpen(false); 
+        setPendingOrder(null);
+      };
 
-    // 您的專屬 Firebase 金鑰
-    const firebaseConfig = {
-      apiKey: "AIzaSyAE9RmAHndM1AmJXIJ8wdkRAaPU4icti9U",
-      authDomain: "mydrinkorder-65bb7.firebaseapp.com",
-      projectId: "mydrinkorder-65bb7",
-      storageBucket: "mydrinkorder-65bb7.firebasestorage.app",
-      messagingSenderId: "16175306710",
-      appId: "1:16175306710:web:755c087fb220ea8fecf677"
-    };
-
-    const app = initializeApp(firebaseConfig);
-    const auth = getAuth(app);
-    const db = getFirestore(app);
-
-    // --- 五份菜單資料 ---
-    const MENU_DEZHENG = {
-      key: 'DEZHENG',
-      name: '得正 OOLONG TEA PROJECT',
-      phone: '04-7980211',
-      address: '彰化縣伸港鄉中山路29號',
-      sugar: ['正常糖', '少糖', '半糖', '微糖', '無糖'],
-      ice: ['正常冰', '少冰', '微冰', '去冰', '溫', '熱'],
-      toppings: [
-        { name: '珍珠', price: 10 },
-        { name: '黃金珍珠', price: 10 },
-        { name: '焙烏龍茶凍', price: 10 }
-      ],
-      items: [
-        { name: '紅茶', prices: { M: 25, L: 30 } },
-        { name: '綠茶', prices: { M: 25, L: 30 } },
-        { name: '春烏龍', prices: { M: 30, L: 35 } },
-        { name: '輕烏龍', prices: { M: 30, L: 35 } },
-        { name: '焙烏龍', prices: { M: 30, L: 35 } },
-        { name: '檸檬春烏龍', prices: { M: 55, L: 65 } },
-        { name: '香橙春烏龍', prices: { M: 60, L: 70 } },
-        { name: '甘蔗春烏龍', prices: { M: 60, L: 70 } },
-        { name: '青梅春烏龍', prices: { M: 50, L: 60 } },
-        { name: '優酪春烏龍', prices: { M: 55, L: 65 } },
-        { name: '雙柚金烏龍', prices: { M: 55, L: 65 } },
-        { name: '芝士奶蓋春烏龍 (冰度固定少冰)', prices: { M: 50, L: 60 } },
-        { name: '芝士奶蓋焙烏龍 (冰度固定少冰)', prices: { M: 50, L: 60 } },
-        { name: '芝士奶蓋阿華田 (冰度固定少冰)', prices: { M: 55, L: 65 } },
-        { name: '芝士奶蓋烘吉茶 (冰度固定少冰)', prices: { M: 55, L: 65 } },
-        { name: '奶茶', prices: { M: 45, L: 50 } },
-        { name: '焙烏龍奶茶', prices: { M: 45, L: 50 } },
-        { name: '珍珠奶茶', prices: { M: 55, L: 60 } },
-        { name: '黃金珍珠奶綠', prices: { M: 55, L: 60 } },
-        { name: '烘吉奶茶', prices: { M: 50 } },
-        { name: '紅茶鮮奶', prices: { M: 55, L: 65 } },
-        { name: '輕烏龍鮮奶', prices: { M: 55, L: 65 } },
-        { name: '焙烏龍鮮奶', prices: { M: 55, L: 65 } },
-        { name: '烘吉鮮奶', prices: { M: 70 } }
-      ]
-    };
-
-    const MENU_GUIJI = {
-      key: 'GUIJI',
-      name: '龜祭 (伸港中山店)',
-      phone: '04-7986075',
-      address: '彰化縣伸港鄉中山路5號',
-      sugar: ['正常糖(100%)', '八分糖(80%)', '半糖(50%)', '微糖(30%)', '一分糖(10%)', '無糖(0%)'],
-      ice: ['正常冰(100%)', '少冰(80%)', '微冰(30%)', '去冰(0%)', '溫', '熱'],
-      toppings: [
-        { name: '珍珠', price: 10 },
-        { name: '蘆薈', price: 10 },
-        { name: '椰果', price: 10 }
-      ],
-      items: [
-        { name: '極品紅茶', prices: { 單一: 35 } },
-        { name: '翡翠綠茶', prices: { 單一: 35 } },
-        { name: '青四季春', prices: { 單一: 35 } },
-        { name: '三韻紅萱', prices: { 單一: 40 } },
-        { name: '三十三茶王', prices: { 單一: 45 } },
-        { name: '花漾烏龍', prices: { 單一: 45 } },
-        { name: '極品奶茶', prices: { 單一: 50 } },
-        { name: '翡翠奶茶', prices: { 單一: 50 } },
-        { name: '茶王奶茶', prices: { 單一: 55 } },
-        { name: '碎銀普洱奶茶', prices: { 單一: 60 } },
-        { name: '珍珠奶茶', prices: { 單一: 60 } },
-        { name: '蜂蜜奶茶 (甜度固定)', prices: { 單一: 60 } },
-        { name: '鮮果百香紅茶 (最低一分糖)', prices: { 單一: 55 } },
-        { name: '鮮果百香綠茶 (最低一分糖)', prices: { 單一: 55 } },
-        { name: '翡翠雷夢', prices: { 單一: 60 } },
-        { name: '柳丁翡翠 (最低一分糖)', prices: { 單一: 60 } },
-        { name: '蘋果紅萱 (最低一分糖)', prices: { 單一: 60 } },
-        { name: '蜜桃烏龍', prices: { 單一: 70 } },
-        { name: '紅柚翡翠', prices: { 單一: 75 } },
-        { name: '極品鮮乳茶', prices: { 單一: 65 } },
-        { name: '翡翠鮮乳茶', prices: { 單一: 65 } },
-        { name: '龜記濃乳茶', prices: { 單一: 65 } },
-        { name: '冬瓜鮮乳', prices: { 單一: 65 } },
-        { name: '茶王鮮乳茶', prices: { 單一: 75 } },
-        { name: '巧克力鮮乳茶 (最低一分糖)', prices: { 單一: 75 } },
-        { name: '碎銀普洱鮮乳', prices: { 單一: 75 } },
-        { name: '豆漿紅茶', prices: { 單一: 45 } },
-        { name: '冬瓜茶王', prices: { 單一: 50 } },
-        { name: '阿
+      // 2. 購物車結帳邏輯 (一次送出多筆)
+      const submitCart = async () => {
+        if (cart.length === 0) return;
+        setLoading(true);
+        try {
+          const batch = writeBatch(db); // 使用 Batch 一次打包送出
+          cart.forEach(item => {
+            const { cartId, ...firebaseData } = item; // 移除暫時 ID
+            const ref = doc(collection(db, 'orders'));
+            batch.set(ref, firebaseData);
+          });
+          await batch.commit();
+          showNotify(`成功送出 ${cart.length} 杯飲料！`);
+          setCart([]); // 清空購物車
+        } catch (e) {
+          showNotify('送出失敗', 'error');
+        }
+        setLoading(false);
+      };
